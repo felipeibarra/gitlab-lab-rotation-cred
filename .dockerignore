@@ -1,0 +1,8 @@
+.git
+.lab
+.env
+.venv
+__pycache__
+tests
+docs
+evidence

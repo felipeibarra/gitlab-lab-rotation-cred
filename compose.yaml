@@ -1,0 +1,116 @@
+name: gitlab-migration-lab
+
+x-app: &app
+  build:
+    context: .
+    args:
+      LAB_UID: ${LAB_UID:-1000}
+      LAB_GID: ${LAB_GID:-1000}
+  image: migration-lab-app:local
+  restart: unless-stopped
+  networks: [lab]
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+
+services:
+  gitlab:
+    image: ${GITLAB_IMAGE:-gitlab/gitlab-ee:19.4.1-ee.0}
+    hostname: gitlab.lab
+    restart: unless-stopped
+    shm_size: '256m'
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.lab:8929'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2224
+        gitlab_rails['initial_root_password'] = File.read('/run/secrets/root_password').strip
+        gitlab_rails['gitlab_signup_enabled'] = false
+        gitlab_rails['gitlab_email_enabled'] = false
+        letsencrypt['enable'] = false
+        prometheus_monitoring['enable'] = false
+        puma['worker_processes'] = 2
+        sidekiq['concurrency'] = 5
+    secrets: [root_password]
+    ports:
+      - '127.0.0.1:8929:8929'
+      - '127.0.0.1:2224:22'
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+    networks:
+      lab:
+        aliases: [gitlab.lab]
+    healthcheck:
+      test: [CMD-SHELL, 'curl -fsS http://127.0.0.1:8929/-/readiness >/dev/null']
+      interval: 20s
+      timeout: 10s
+      retries: 45
+      start_period: 120s
+
+  runner:
+    image: ${RUNNER_IMAGE:-gitlab/gitlab-runner:alpine-v19.4.0}
+    restart: unless-stopped
+    profiles: [ci]
+    volumes:
+      - ./.lab/runner:/etc/gitlab-runner
+      # Privileged control plane: dedicated LOCAL lab only. Not mounted in jobs.
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [lab]
+
+  catalog:
+    <<: *app
+    command: [python, -m, services.app, catalog]
+    environment:
+      RUNTIME_DIR: /runtime
+    volumes: ['./.lab/runtime:/runtime:ro']
+    ports: ['127.0.0.1:8081:8000']
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  orders:
+    <<: *app
+    command: [python, -m, services.app, orders]
+    environment:
+      CATALOG_URL: http://catalog:8000
+    ports: ['127.0.0.1:8082:8000']
+    depends_on:
+      catalog: {condition: service_healthy}
+
+  deployer:
+    <<: *app
+    command: [python, -m, services.app, deployer]
+    environment:
+      GITLAB_URL: http://gitlab.lab:8929
+      RUNTIME_DIR: /runtime
+    volumes: ['./.lab/runtime:/runtime']
+    ports: ['127.0.0.1:8083:8000']
+
+  config-sync:
+    <<: *app
+    command: [python, -m, services.worker]
+    profiles: [ci]
+    environment:
+      GITLAB_URL: http://gitlab.lab:8929
+      WORKER_CONFIG: /credentials/config.json
+      RUNTIME_DIR: /runtime
+    volumes:
+      - ./.lab/worker:/credentials:ro
+      - ./.lab/runtime:/runtime
+
+networks:
+  lab:
+    name: gitlab-migration-lab-net
+
+volumes:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+
+secrets:
+  root_password:
+    file: ./.lab/root_password

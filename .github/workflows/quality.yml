@@ -1,0 +1,23 @@
+name: Lab quality (no GitLab credentials)
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit and local HTTP tests
+        run: python -m unittest discover -s tests -v
+      - name: Compile Python
+        run: python -m compileall -q lab services ci scripts tests
+      - name: Secret guard
+        run: python scripts/check-secrets.py --staged
+      - name: Compose syntax validation
+        run: |
+          ./scripts/labctl init
+          docker compose config --quiet
+# This workflow deliberately does NOT start GitLab or receive lab credentials.

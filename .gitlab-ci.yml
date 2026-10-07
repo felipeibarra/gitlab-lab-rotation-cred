@@ -1,0 +1,45 @@
+# Runs in the LOCAL GitLab automation project populated by labctl seed.
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "api" || $CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "schedule"'
+    - when: never
+stages: [test, read, publish, deploy, verify]
+default:
+  image: python:3.12-slim
+  tags: [migration-lab]
+  interruptible: false
+  timeout: 5m
+variables:
+  GIT_STRATEGY: clone
+  PYTHONDONTWRITEBYTECODE: '1'
+  PYTHONUNBUFFERED: '1'
+unit-tests:
+  stage: test
+  script:
+    - python -m unittest discover -s tests -v
+read-private-config:
+  stage: read
+  script:
+    - python ci/job.py read
+  artifacts:
+    paths: [build/catalog.json, build/reader.json]
+    expire_in: 1 day
+publish-release:
+  stage: publish
+  script:
+    - python ci/job.py publish
+  artifacts:
+    paths: [build/catalog.json, build/reader.json, build/publisher.json]
+    expire_in: 1 day
+deploy-local:
+  stage: deploy
+  resource_group: local-configuration
+  script:
+    - python ci/job.py deploy
+  artifacts:
+    paths: [build/deployer.json]
+    expire_in: 1 day
+business-smoke:
+  stage: verify
+  script:
+    - python ci/job.py smoke
