@@ -79,9 +79,11 @@ make baseline
 | Interfaz | Dirección local |
 |---|---|
 | GitLab | `http://gitlab.lab:8929` |
-| Catálogo | `http://127.0.0.1:8081/products` |
+| Catálogo | `http://127.0.0.1:18081/products` |
 | Pedidos | `http://127.0.0.1:8082/health` |
 | Despliegue actual | `http://127.0.0.1:8083/release` |
+
+El puerto del catálogo es `18081` para evitar conflictos comunes en `8081`. Si ese puerto también está ocupado, define `CATALOG_PORT` en `.env`. También puedes configurar `ORDERS_PORT` y `DEPLOYER_PORT` (por defecto `8082` y `8083`).
 
 Usuario UI: `root`. Su contraseña está en el archivo privado local `.lab/root_password`. Ábrelo únicamente en tu equipo. Los scripts no imprimen esta contraseña ni los PAT.
 

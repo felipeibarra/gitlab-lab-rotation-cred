@@ -6,6 +6,7 @@ Usa siempre esta secuencia: **conectividad → identidad → scope → membresí
 |---|---|---|
 | Host gitlab.lab no resuelve | `make doctor`; entrada host y alias Docker | Corregir DNS local, no rotar credenciales |
 | GitLab no responde | `docker compose ps`; logs; RAM/disco y readiness | Corregir arranque; conservar estado |
+| `Bind ... :8081 failed: port is already allocated` | Otro proceso o contenedor ocupa el puerto local del catálogo | El puerto por defecto es `18081`; usa `CATALOG_PORT` en `.env` para elegir otro puerto libre y vuelve a ejecutar `docker compose up -d --build gitlab catalog orders deployer` |
 | No matching manifest | Inspeccionar tag/arquitectura con `docker buildx imagetools inspect` | Usar tag verificado, no imágenes de terceros al azar |
 | HTTP 401 | Token ausente, inválido, revocado o usuario bloqueado | Verificar variable/identidad sin imprimir valor |
 | HTTP 403 | Scope, rol o política insuficiente | Identificar operación y mínimo permiso necesario |
